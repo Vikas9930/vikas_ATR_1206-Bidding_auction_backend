@@ -7,6 +7,7 @@ import { OutbidNotificationProcessor } from './outbid-notification.processor';
 import { AuctionReminderProcessor } from './auction-reminder.processor';
 import { WorkersService } from './workers.service';
 import { AuctionItem } from '../auctions/entities/auction-item.entity';
+import { AuctionWin } from '../auctions/entities/auction-win.entity';
 import { User } from '../users/entities/user.entity';
 import { WebsocketModule } from '../websocket/websocket.module';
 
@@ -23,7 +24,7 @@ import { WebsocketModule } from '../websocket/websocket.module';
         name: 'auction-reminder',
       },
     ),
-    TypeOrmModule.forFeature([AuctionItem, User]),
+    TypeOrmModule.forFeature([AuctionItem, AuctionWin, User]),
     ScheduleModule.forRoot(),
     WebsocketModule,
   ],

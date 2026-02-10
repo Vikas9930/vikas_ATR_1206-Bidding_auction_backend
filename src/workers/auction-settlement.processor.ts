@@ -4,6 +4,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { AuctionItem, AuctionStatus } from '../auctions/entities/auction-item.entity';
+import { AuctionWin } from '../auctions/entities/auction-win.entity';
 import { User } from '../users/entities/user.entity';
 import { WebsocketGateway } from '../websocket/websocket.gateway';
 
@@ -15,6 +16,8 @@ export class AuctionSettlementProcessor extends WorkerHost {
   constructor(
     @InjectRepository(AuctionItem)
     private auctionRepository: Repository<AuctionItem>,
+    @InjectRepository(AuctionWin)
+    private auctionWinRepository: Repository<AuctionWin>,
     private dataSource: DataSource,
     private websocketGateway: WebsocketGateway,
   ) {
@@ -65,6 +68,17 @@ export class AuctionSettlementProcessor extends WorkerHost {
         : null;
 
       if (highestBid) {
+        // Check if win record already exists (idempotency check)
+        const existingWin = await queryRunner.manager.findOne(AuctionWin, {
+          where: { auctionId },
+        });
+
+        if (existingWin) {
+          this.logger.log(`Win record already exists for auction ${auctionId}, skipping`);
+          await queryRunner.rollbackTransaction();
+          return;
+        }
+
         // Auction sold
         auction.status = AuctionStatus.SOLD;
         auction.winnerId = highestBid.bidderId;
@@ -75,21 +89,68 @@ export class AuctionSettlementProcessor extends WorkerHost {
         // Now we transfer that amount to the creator
         const creator = await queryRunner.manager.findOne(User, {
           where: { id: auction.creatorId },
+          lock: { mode: 'pessimistic_write' },
         });
         if (creator) {
           creator.balance = Number(creator.balance) + Number(highestBid.amount);
           await queryRunner.manager.save(creator);
         }
 
+        // Get winner with lock
+        const winner = await queryRunner.manager.findOne(User, {
+          where: { id: highestBid.bidderId },
+          lock: { mode: 'pessimistic_write' },
+        });
+
+        if (winner) {
+          // Increment winner's total wins (idempotent - using database increment)
+          await queryRunner.manager.increment(User, { id: highestBid.bidderId }, 'totalWins', 1);
+        }
+
+        // Create auction win history record
+        const auctionWin = queryRunner.manager.create(AuctionWin, {
+          auctionId,
+          winnerId: highestBid.bidderId,
+          finalPrice: Number(highestBid.amount),
+          endedAt: now,
+        });
+        await queryRunner.manager.save(auctionWin);
+
         await queryRunner.commitTransaction();
 
-        // Emit WebSocket event
+        // Emit WebSocket events
         const winnerName = highestBid.bidder?.email?.split('@')[0] || 'Unknown';
+        const winnerId = highestBid.bidderId;
+        
+        // Emit to auction room (all viewers)
         this.websocketGateway.emitAuctionSold(
           auctionId,
+          winnerId,
           winnerName,
           Number(highestBid.amount),
         );
+
+        // Emit specific notification to winner
+        this.websocketGateway.emitAuctionWon(
+          winnerId,
+          {
+            auctionId,
+            auctionTitle: auction.title,
+            finalPrice: Number(highestBid.amount),
+            winnerName,
+          },
+        );
+
+        // Emit balance update to creator (they received payment)
+        const creatorUpdated = await this.auctionRepository.manager.findOne(User, {
+          where: { id: auction.creatorId },
+        });
+        if (creatorUpdated) {
+          this.websocketGateway.emitBalanceUpdate(
+            auction.creatorId,
+            Number(creatorUpdated.balance),
+          );
+        }
 
         this.logger.log(`Auction ${auctionId} sold to ${winnerName} for $${highestBid.amount}`);
       } else {

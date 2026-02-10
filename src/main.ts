@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 import { Logger } from 'nestjs-pino';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -42,11 +43,47 @@ async function bootstrap() {
   // Set global API prefix
   app.setGlobalPrefix('api/v1');
 
+  // Swagger/OpenAPI Configuration
+  const config = new DocumentBuilder()
+    .setTitle('LiveBid API')
+    .setDescription('Real-time auction and bidding platform API documentation. This API provides endpoints for user management, auction creation, bidding, and real-time updates via WebSocket.')
+    .setVersion('1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Enter JWT token',
+        in: 'header',
+      },
+      'JWT-auth', // This name here is important for matching up with @ApiBearerAuth() in your controller!
+    )
+    .addTag('Authentication', 'User registration and login endpoints')
+    .addTag('Users', 'User profile, statistics, and win history endpoints')
+    .addTag('Auctions', 'Auction management, bidding, and listing endpoints')
+    .addServer('http://localhost:3000', 'Development server')
+    .addServer('https://api.livebid.com', 'Production server')
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+      tagsSorter: 'alpha',
+      operationsSorter: 'alpha',
+    },
+    customSiteTitle: 'LiveBid API Documentation',
+    customfavIcon: '/favicon.ico',
+    customCss: '.swagger-ui .topbar { display: none }',
+  });
+
   const port = process.env.PORT || 3000;
   await app.listen(port);
   
   const logger = app.get(Logger);
   logger.log(`Application is running on: http://localhost:${port}`);
+  logger.log(`Swagger documentation available at: http://localhost:${port}/api/docs`);
 }
 
 bootstrap();

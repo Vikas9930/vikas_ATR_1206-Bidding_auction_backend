@@ -196,11 +196,27 @@ export class WebsocketGateway
     });
   }
 
-  emitAuctionSold(auctionId: string, winnerName: string, finalPrice: number) {
+  emitAuctionSold(auctionId: string, winnerId: string, winnerName: string, finalPrice: number) {
     this.server.to(`auction:${auctionId}`).emit('AUCTION_SOLD', {
       auctionId,
+      winnerId,
       winnerName,
       finalPrice,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  emitAuctionWon(winnerId: string, data: {
+    auctionId: string;
+    auctionTitle: string;
+    finalPrice: number;
+    winnerName: string;
+  }) {
+    // Emit to winner's private room
+    this.server.to(`user:${winnerId}`).emit('AUCTION_WON', {
+      message: `Congratulations! You won the auction "${data.auctionTitle}" for $${data.finalPrice.toFixed(2)}!`,
+      ...data,
+      timestamp: new Date().toISOString(),
     });
   }
 

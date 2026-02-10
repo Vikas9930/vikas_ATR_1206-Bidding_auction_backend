@@ -22,6 +22,9 @@ export class User {
   @Column('decimal', { precision: 10, scale: 2, default: 0 })
   balance: number;
 
+  @Column('int', { default: 0 })
+  totalWins: number;
+
   @CreateDateColumn()
   createdAt: Date;
 

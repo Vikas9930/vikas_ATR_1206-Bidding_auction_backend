@@ -125,6 +125,18 @@ socket.on('AUCTION_EXPIRED', (data) => {
   console.log('');
 });
 
+// Auction won (personal notification)
+socket.on('AUCTION_WON', (data) => {
+  console.log('🎉🎉🎉 YOU WON AN AUCTION! 🎉🎉🎉');
+  console.log('   Message: ' + data.message);
+  console.log('   Auction ID: ' + data.auctionId);
+  console.log('   Auction Title: ' + data.auctionTitle);
+  console.log('   Final Price: $' + data.finalPrice);
+  console.log('   Winner: ' + data.winnerName);
+  console.log('   Time: ' + new Date(data.timestamp).toLocaleString());
+  console.log('');
+});
+
 // Keep script running
 console.log('Press Ctrl+C to exit\n');
 

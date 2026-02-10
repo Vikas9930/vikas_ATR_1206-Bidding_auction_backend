@@ -61,8 +61,8 @@ export class AuctionItem {
   @Index()
   endsAt: Date;
 
-  @Column({ type: 'varchar', length: 1000, nullable: true })
-  imageUrl: string | null;
+  // @Column({ type: 'varchar', length: 1000, nullable: true })
+  // imageUrl: string | null;
 
   @CreateDateColumn()
   createdAt: Date;
